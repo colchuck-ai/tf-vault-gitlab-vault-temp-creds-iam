@@ -1,0 +1,46 @@
+include:
+  - component: gitlab.example.com/engineering/dev-tools/gitlab-cicd-components/gitlab-cicd-release-workflow/release-workflow@1.0.0
+  - component: gitlab.example.com/engineering/dev-tools/gitlab-cicd-components/gitlab-cicd-terraform/terraform-format-check@2.0.0
+    inputs:
+      terraform-image-version: "1.6"
+  - component: gitlab.example.com/engineering/dev-tools/gitlab-cicd-components/gitlab-cicd-terraform/publish-terraform-module@2.0.0
+    inputs:
+      terraform-module-system: "vault"
+
+.npm:
+  image: proxy.docker.example.com/node:20
+  before_script:
+    - npm config set -- //${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/:_authToken=${ENGINEERING_DEV_TOOLS_INTERNAL_DEPLOY_PASSWORD}
+    - npm config set @engineering:registry=https://${CI_SERVER_HOST}/api/v4/groups/1234/-/packages/npm/
+    - npm install
+
+stages:
+  - test
+  - release
+  - publish
+
+lint:
+  stage: test
+  extends:
+    - .npm
+  script:
+    - npm run lint:ci
+
+terraform-format-check:
+  stage: test
+  extends:
+    - .terraform-format-check
+
+release:
+  stage: release
+  extends:
+    - .npm
+    - .release-rules
+  script:
+    - npx semantic-release
+
+publish:
+  stage: publish
+  extends:
+    - .publish-rules
+    - .publish-terraform-module:tf-vault-gitlab-vault-temp-creds-iam
